@@ -33,7 +33,7 @@ def estimate_pi_pytorch_cpu(n_samples: int) -> Tuple[float, float]:
 
     pi_estimate = 4 * inside / n_samples
     end = time.perf_counter()
-    return pi_estimate, end - start
+    return float(pi_estimate.item()), end - start
 
 def estimate_pi_pytorch_cuda(n_samples: int, device: str = "cuda") -> Tuple[float, float]:
     """
@@ -53,6 +53,8 @@ def estimate_pi_pytorch_cuda(n_samples: int, device: str = "cuda") -> Tuple[floa
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available. Please check your PyTorch installation.")
     
+    # For accurate timing, synchronize before and after the measured region.
+    torch.cuda.synchronize()
     start = time.perf_counter()
 
     # allocate tensors on GPU
@@ -66,8 +68,9 @@ def estimate_pi_pytorch_cuda(n_samples: int, device: str = "cuda") -> Tuple[floa
     inside = torch.sum(distance_squared <= 1.0)
     pi_estimate = 4 * inside / n_samples
 
+    torch.cuda.synchronize()
     end = time.perf_counter()
-    return pi_estimate, end - start
+    return float(pi_estimate.item()), end - start
 
 
 def estimate_pi_pytorch_cuda_batched(
@@ -94,6 +97,7 @@ def estimate_pi_pytorch_cuda_batched(
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available. Please check your PyTorch installation.")
     
+    torch.cuda.synchronize()
     start = time.perf_counter()
 
     inside = 0
@@ -107,8 +111,16 @@ def estimate_pi_pytorch_cuda_batched(
         remaining -= current_batch
 
     pi_estimate = 4 * inside / n_samples
+    torch.cuda.synchronize()
     end = time.perf_counter()
     return pi_estimate, end - start
+
+
+def estimate_pi_pytorch_gpu(n_samples: int, device: str = "cuda") -> Tuple[float, float]:
+    """
+    Backwards-compatible alias for GPU execution used by the examples/benchmarks.
+    """
+    return estimate_pi_pytorch_cuda(n_samples, device=device)
 
 def get_gpu_info() -> dict:
     """
@@ -124,6 +136,7 @@ def get_gpu_info() -> dict:
         "available": True,
         "device_count": torch.cuda.device_count(),
         "device_name": torch.cuda.get_device_name(0),
+        "cuda_version": torch.version.cuda,
         "total_memory": torch.cuda.get_device_properties(0).total_memory,
         "current_device": torch.cuda.current_device(),
         "is_available": torch.cuda.is_available(),
